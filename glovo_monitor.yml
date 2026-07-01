@@ -1,0 +1,40 @@
+name: Glovo Menu Monitor
+
+on:
+  schedule:
+    # Todos los días a las 12:30 hora de Madrid (11:30 UTC en verano)
+    - cron: '30 11 * * *'
+  workflow_dispatch:  # Permite ejecutarlo manualmente desde GitHub
+
+jobs:
+  revisar-menu:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Instalar dependencias
+        run: |
+          pip install -r requirements.txt
+          playwright install chromium
+          playwright install-deps chromium
+
+      - name: Ejecutar revisión de menús
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: python glovo_monitor.py
+
+      - name: Guardar informe como artefacto
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: informe-glovo-${{ github.run_number }}
+          path: ultimo_informe.json
+          retention-days: 30

@@ -1,5 +1,6 @@
 """
 Glovo Menu Monitor - Street Smash Burgers
+Usa URLs con coordenadas GPS para acceder directamente a cada tienda.
 """
 
 import asyncio
@@ -21,27 +22,28 @@ CARTA_MAESTRA = [
     "Pastrami Burger", "Chimichurri",
 ]
 
+# Coordenadas GPS de cada tienda
 TIENDAS = [
-    ("Campo de Ourique",   "Rua Almeida e Sousa 36B Lisboa"),
-    ("Saldanha",           "Avenida Defensores de Chaves 77 Lisboa"),
-    ("Cais do Sodre",      "Rua da Boavista 34 Lisboa"),
-    ("Anjos",              "Rua de Anjos 78 Lisboa"),
-    ("Alvalade",           "Avenida da Igreja 8 Lisboa"),
-    ("Cascais",            "Rua Frederico Arouca 50 Cascais"),
-    ("Odivelas",           "Rua Egas Moniz 10 Odivelas"),
-    ("Vasco da Gama",      "Avenida Dom Joao II Lisboa"),
-    ("UBBO",               "Estrada de Alfragide Amadora"),
-    ("Almada",             "Praca do Chile 1 Almada"),
-    ("Arrabida",           "Rua Particular da Arrabida Vila Nova de Gaia"),
-    ("Junqueiro",          "Avenida Guerra Junqueiro 30 Lisboa"),
-    ("Porto Baixa",        "Rua de Santa Catarina 10 Porto"),
-    ("Porto Matosinhos",   "Rua Roberto Ivens 10 Matosinhos"),
-    ("Porto Bessa",        "Avenida da Boavista 700 Porto"),
-    ("Porto MarShopping",  "Avenida Meneres Matosinhos"),
-    ("Porto Via Catarina", "Rua de Santa Catarina 312 Porto"),
+    ("Campo de Ourique",   38.7133, -9.1589, "pt", "pt", "lisboa"),
+    ("Saldanha",           38.7369, -9.1439, "pt", "pt", "lisboa"),
+    ("Cais do Sodre",      38.7063, -9.1456, "pt", "pt", "lisboa"),
+    ("Anjos",              38.7236, -9.1358, "pt", "pt", "lisboa"),
+    ("Alvalade",           38.7517, -9.1478, "pt", "pt", "lisboa"),
+    ("Cascais",            38.6979, -9.4215, "pt", "pt", "cascais"),
+    ("Odivelas",           38.7952, -9.1860, "pt", "pt", "odivelas"),
+    ("Vasco da Gama",      38.7633, -9.0988, "pt", "pt", "lisboa"),
+    ("UBBO",               38.7340, -9.2298, "pt", "pt", "amadora"),
+    ("Almada",             38.6766, -9.1594, "pt", "pt", "almada"),
+    ("Arrabida",           41.1621, -8.6521, "pt", "pt", "porto"),
+    ("Junqueiro",          38.7369, -9.1323, "pt", "pt", "lisboa"),
+    ("Porto Baixa",        41.1496, -8.6109, "pt", "pt", "porto"),
+    ("Porto Matosinhos",   41.1837, -8.6916, "pt", "pt", "matosinhos"),
+    ("Porto Bessa",        41.1579, -8.6395, "pt", "pt", "porto"),
+    ("Porto MarShopping",  41.1876, -8.6987, "pt", "pt", "matosinhos"),
+    ("Porto Via Catarina",  41.1496, -8.6109, "pt", "pt", "porto"),
 ]
 
-GLOVO_URL = "https://glovoapp.com/pt/pt/lisboa/stores/street-smash-burgers-lis"
+STORE_SLUG = "street-smash-burgers-lis"
 
 
 async def cerrar_popups(page):
@@ -56,139 +58,9 @@ async def cerrar_popups(page):
             pass
 
 
-async def seleccionar_direccion(page, direccion):
-    try:
-        for selector in [
-            "header button",
-            "[data-testid='address-button']",
-            "button[class*='address']",
-            "nav button:first-child",
-        ]:
-            try:
-                el = page.locator(selector).first
-                if await el.is_visible(timeout=3000):
-                    await el.click()
-                    await page.wait_for_timeout(1500)
-                    break
-            except Exception:
-                continue
-
-        campo = None
-        for selector in [
-            "input[placeholder*='morada']",
-            "input[placeholder*='Procurar']",
-            "input[placeholder*='address']",
-            "input[type='text']",
-            "input[type='search']",
-        ]:
-            try:
-                el = page.locator(selector).first
-                if await el.is_visible(timeout=3000):
-                    campo = el
-                    break
-            except Exception:
-                continue
-
-        if not campo:
-            return False
-
-        await campo.click()
-        await campo.fill("")
-        await campo.type(direccion, delay=60)
-        await page.wait_for_timeout(2000)
-
-        for selector in [
-            "ul li:first-child",
-            "[role='option']:first-child",
-            "[data-testid='address-suggestion']",
-            ".pac-item:first-child",
-        ]:
-            try:
-                sug = page.locator(selector).first
-                if await sug.is_visible(timeout=3000):
-                    await sug.click()
-                    await page.wait_for_timeout(1500)
-                    break
-            except Exception:
-                continue
-
-        for _ in range(3):
-            for texto in ["Outro", "Other"]:
-                try:
-                    btn = page.locator(f"text={texto}").first
-                    if await btn.is_visible(timeout=1000):
-                        await btn.click()
-                        await page.wait_for_timeout(500)
-                except Exception:
-                    pass
-
-            for placeholder in ["Piso", "Floor", "Porta", "Door"]:
-                try:
-                    inp = page.locator(f"input[placeholder*='{placeholder}']").first
-                    if await inp.is_visible(timeout=1000):
-                        await inp.fill("1")
-                except Exception:
-                    pass
-
-            for texto in ["Confirmar morada", "Confirmar", "Confirm"]:
-                try:
-                    btn = page.locator(f"text={texto}").first
-                    if await btn.is_visible(timeout=1000):
-                        await btn.click()
-                        await page.wait_for_timeout(1500)
-                except Exception:
-                    pass
-
-        return True
-
-    except Exception as e:
-        print(f"   Error direccion: {e}")
-        return False
-
-
-async def obtener_direccion_real(page):
-    try:
-        for selector in [
-            "button[aria-label*='info']",
-            "button[aria-label*='Info']",
-            "[data-testid='store-info']",
-        ]:
-            try:
-                btn = page.locator(selector).first
-                if await btn.is_visible(timeout=2000):
-                    await btn.click()
-                    await page.wait_for_timeout(1000)
-                    break
-            except Exception:
-                continue
-
-        contenido = await page.inner_text("body")
-        direccion = ""
-        lineas = contenido.split("\n")
-        for i, linea in enumerate(lineas):
-            if "Morada" in linea and i + 1 < len(lineas):
-                direccion = lineas[i + 1].strip()
-                break
-
-        for texto in ["Entendido", "Got it", "OK", "Fechar"]:
-            try:
-                btn = page.locator(f"text={texto}").first
-                if await btn.is_visible(timeout=1000):
-                    await btn.click()
-                    await page.wait_for_timeout(500)
-                    break
-            except Exception:
-                pass
-
-        return direccion
-
-    except Exception:
-        return ""
-
-
 async def obtener_menu(page):
-    await page.wait_for_timeout(2000)
-    for _ in range(8):
+    await page.wait_for_timeout(3000)
+    for _ in range(10):
         await page.evaluate("window.scrollBy(0, 500)")
         await page.wait_for_timeout(300)
     await page.evaluate("window.scrollTo(0, 0)")
@@ -200,7 +72,8 @@ async def obtener_menu(page):
     patrones = re.findall(
         r'\d+%[^\n]{0,40}|GRATIS[^\n]{0,30}|Gratis[^\n]{0,30}|'
         r'2 por 1[^\n]{0,30}|World Cup[^\n]{0,30}|WORLD CUP[^\n]{0,30}|'
-        r'Edicao Limitada[^\n]{0,30}|EDICAO LIMITADA[^\n]{0,30}',
+        r'Edicao Limitada[^\n]{0,30}|EDICAO LIMITADA[^\n]{0,30}|'
+        r'Gratis no primeiro[^\n]{0,30}',
         texto
     )
     seen = set()
@@ -258,7 +131,6 @@ def formatear_slack(resultados, fecha):
                     "type": "mrkdwn",
                     "text": (
                         f"*{r['nombre']}*\n"
-                        f"_{r['direccion_real'] or r['direccion_entrega']}_\n"
                         f"{ausentes_str}\n"
                         f"Promos: {promos_str}"
                     )
@@ -316,24 +188,13 @@ async def main():
             headless=True,
             args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"]
         )
-        context = await browser.new_context(
-            viewport={"width": 1366, "height": 768},
-            locale="pt-PT",
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        )
-        page = await context.new_page()
-        await page.add_init_script(
-            "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
-        )
 
         print(f"Iniciando revision - {fecha}")
 
-        for nombre, direccion in TIENDAS:
+        for nombre, lat, lon, lang, country, ciudad in TIENDAS:
             print(f"Revisando: {nombre}")
             resultado = {
                 "nombre": nombre,
-                "direccion_entrega": direccion,
-                "direccion_real": "",
                 "productos_ausentes": [],
                 "productos_presentes": [],
                 "promociones": [],
@@ -341,18 +202,23 @@ async def main():
             }
 
             try:
-                await page.goto(GLOVO_URL, wait_until="networkidle", timeout=25000)
+                context = await browser.new_context(
+                    viewport={"width": 1366, "height": 768},
+                    locale="pt-PT",
+                    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    geolocation={"latitude": lat, "longitude": lon},
+                    permissions=["geolocation"],
+                )
+                page = await context.new_page()
+                await page.add_init_script(
+                    "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
+                )
+
+                # URL directa con ciudad
+                url = f"https://glovoapp.com/{lang}/{country}/{ciudad}/stores/{STORE_SLUG}"
+                await page.goto(url, wait_until="networkidle", timeout=30000)
                 await page.wait_for_timeout(2000)
                 await cerrar_popups(page)
-
-                ok = await seleccionar_direccion(page, direccion)
-                if not ok:
-                    resultado["error"] = "No se pudo seleccionar la direccion"
-                    resultados.append(resultado)
-                    continue
-
-                dir_real = await obtener_direccion_real(page)
-                resultado["direccion_real"] = dir_real
 
                 texto, promos = await obtener_menu(page)
                 resultado["promociones"] = promos
@@ -366,12 +232,18 @@ async def main():
                 print(f"  Ausentes: {resultado['productos_ausentes']}")
                 print(f"  Promos: {promos}")
 
+                await context.close()
+
             except Exception as e:
                 resultado["error"] = str(e)[:150]
                 print(f"  Error: {e}")
+                try:
+                    await context.close()
+                except Exception:
+                    pass
 
             resultados.append(resultado)
-            await page.wait_for_timeout(1500)
+            await asyncio.sleep(2)
 
         await browser.close()
 

@@ -8,7 +8,7 @@ on:
 
 jobs:
   revisar-menu:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 30
 
     steps:
@@ -20,9 +20,11 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Instalar dependencias
+      - name: Instalar dependencias Python
+        run: pip install -r requirements.txt
+
+      - name: Instalar Playwright y navegador
         run: |
-          pip install -r requirements.txt
           playwright install chromium
           playwright install-deps chromium
 
@@ -38,3 +40,4 @@ jobs:
           name: informe-glovo-${{ github.run_number }}
           path: ultimo_informe.json
           retention-days: 30
+          if-no-files-found: ignore

@@ -1,6 +1,5 @@
 """
 Glovo Menu Monitor - Street Smash Burgers
-Usa URLs con coordenadas GPS para acceder directamente a cada tienda.
 """
 
 import asyncio
@@ -22,28 +21,28 @@ CARTA_MAESTRA = [
     "Pastrami Burger", "Chimichurri",
 ]
 
-# Coordenadas GPS de cada tienda
 TIENDAS = [
-    ("Campo de Ourique",   38.7133, -9.1589, "pt", "pt", "lisboa"),
-    ("Saldanha",           38.7369, -9.1439, "pt", "pt", "lisboa"),
-    ("Cais do Sodre",      38.7063, -9.1456, "pt", "pt", "lisboa"),
-    ("Anjos",              38.7236, -9.1358, "pt", "pt", "lisboa"),
-    ("Alvalade",           38.7517, -9.1478, "pt", "pt", "lisboa"),
-    ("Cascais",            38.6979, -9.4215, "pt", "pt", "cascais"),
-    ("Odivelas",           38.7952, -9.1860, "pt", "pt", "odivelas"),
-    ("Vasco da Gama",      38.7633, -9.0988, "pt", "pt", "lisboa"),
-    ("UBBO",               38.7340, -9.2298, "pt", "pt", "amadora"),
-    ("Almada",             38.6766, -9.1594, "pt", "pt", "almada"),
-    ("Arrabida",           41.1621, -8.6521, "pt", "pt", "porto"),
-    ("Junqueiro",          38.7369, -9.1323, "pt", "pt", "lisboa"),
-    ("Porto Baixa",        41.1496, -8.6109, "pt", "pt", "porto"),
-    ("Porto Matosinhos",   41.1837, -8.6916, "pt", "pt", "matosinhos"),
-    ("Porto Bessa",        41.1579, -8.6395, "pt", "pt", "porto"),
-    ("Porto MarShopping",  41.1876, -8.6987, "pt", "pt", "matosinhos"),
-    ("Porto Via Catarina",  41.1496, -8.6109, "pt", "pt", "porto"),
+    ("Campo de Ourique",   38.7133, -9.1589, "lisboa",     "street-smash-burgers-lis"),
+    ("Saldanha",           38.7369, -9.1439, "lisboa",     "street-smash-burgers-lis"),
+    ("Cais do Sodre",      38.7063, -9.1456, "lisboa",     "street-smash-burgers-lis"),
+    ("Anjos",              38.7236, -9.1358, "lisboa",     "street-smash-burgers-lis"),
+    ("Alvalade",           38.7517, -9.1478, "lisboa",     "street-smash-burgers-lis"),
+    ("Cascais",            38.6979, -9.4215, "cascais",    "street-smash-burgers-csc"),
+    ("Odivelas",           38.7952, -9.1860, "odivelas",   "street-smash-burgers-odi"),
+    ("Vasco da Gama",      38.7633, -9.0988, "lisboa",     "street-smash-burgers-lis"),
+    ("UBBO",               38.7340, -9.2298, "amadora",    "street-smash-burgers-lis"),
+    ("Almada",             38.6766, -9.1594, "almada",     "street-smash-burgers-lis"),
+    ("Arrabida",           41.1621, -8.6521, "porto",      "street-smash-burgers-opo"),
+    ("Junqueiro",          38.7369, -9.1323, "lisboa",     "street-smash-burgers-lis"),
+    ("Porto Baixa",        41.1496, -8.6109, "porto",      "street-smash-burgers-opo"),
+    ("Porto Matosinhos",   41.1837, -8.6916, "matosinhos", "street-smash-burgers-opo"),
+    ("Porto Bessa",        41.1579, -8.6395, "porto",      "street-smash-burgers-opo"),
+    ("Porto MarShopping",  41.1876, -8.6987, "matosinhos", "street-smash-burgers-opo"),
+    ("Porto Via Catarina", 41.1496, -8.6109, "porto",      "street-smash-burgers-opo"),
 ]
 
-STORE_SLUG = "street-smash-burgers-lis"
+# Si la tienda cargó bien, debe tener al menos estos productos visibles
+MIN_PRODUCTOS_VALIDOS = 5
 
 
 async def cerrar_popups(page):
@@ -70,10 +69,17 @@ async def obtener_menu(page):
 
     promos = []
     patrones = re.findall(
-        r'\d+%[^\n]{0,40}|GRATIS[^\n]{0,30}|Gratis[^\n]{0,30}|'
-        r'2 por 1[^\n]{0,30}|World Cup[^\n]{0,30}|WORLD CUP[^\n]{0,30}|'
-        r'Edicao Limitada[^\n]{0,30}|EDICAO LIMITADA[^\n]{0,30}|'
-        r'Gratis no primeiro[^\n]{0,30}',
+        r'-?\d+%[^\n]{0,40}|'
+        r'Free delivery[^\n]{0,30}|'
+        r'Gratis[^\n]{0,30}|'
+        r'GRATIS[^\n]{0,30}|'
+        r'2 por 1[^\n]{0,30}|'
+        r'2 for 1[^\n]{0,30}|'
+        r'World Cup[^\n]{0,30}|'
+        r'WORLD CUP[^\n]{0,30}|'
+        r'Pastrami[^\n]{0,40}|'
+        r'Edição Limitada[^\n]{0,30}|'
+        r'Limited Edition[^\n]{0,30}',
         texto
     )
     seen = set()
@@ -83,47 +89,50 @@ async def obtener_menu(page):
             promos.append(p)
             seen.add(p)
 
-    return texto, promos[:5]
+    return texto, promos[:6]
+
+
+def tienda_cargo_bien(productos_presentes):
+    """Comprueba que la tienda cargó correctamente."""
+    return len(productos_presentes) >= MIN_PRODUCTOS_VALIDOS
 
 
 def formatear_slack(resultados, fecha):
     total = len(resultados)
-    con_incidencias = sum(1 for r in resultados if r["productos_ausentes"] and not r["error"])
-    sin_incidencias = sum(1 for r in resultados if not r["productos_ausentes"] and not r["error"])
-    con_error = sum(1 for r in resultados if r["error"])
+    ok_list = [r for r in resultados if r["estado"] == "ok" and len(r["productos_ausentes"]) == 0]
+    incidencias = [r for r in resultados if r["estado"] == "ok" and len(r["productos_ausentes"]) > 0]
+    no_encontradas = [r for r in resultados if r["estado"] == "no_encontrada"]
+    errores = [r for r in resultados if r["estado"] == "error"]
 
     bloques = [
         {
             "type": "header",
-            "text": {"type": "plain_text", "text": "Informe Glovo - Street Smash Burgers", "emoji": True}
+            "text": {"type": "plain_text", "text": "🍔 Informe Glovo - Street Smash Burgers", "emoji": True}
         },
         {
             "type": "context",
-            "elements": [{"type": "mrkdwn", "text": f"Fecha: {fecha} | {total} tiendas revisadas"}]
+            "elements": [{"type": "mrkdwn", "text": f"📅 {fecha} | {total} tiendas revisadas"}]
         },
         {
             "type": "section",
             "fields": [
-                {"type": "mrkdwn", "text": f"*Sin incidencias:* {sin_incidencias}"},
-                {"type": "mrkdwn", "text": f"*Con incidencias:* {con_incidencias}"},
-                {"type": "mrkdwn", "text": f"*Errores:* {con_error}"},
-                {"type": "mrkdwn", "text": f"*Total tiendas:* {total}"},
+                {"type": "mrkdwn", "text": f"✅ *Sin incidencias:* {len(ok_list)}"},
+                {"type": "mrkdwn", "text": f"❌ *Con incidencias:* {len(incidencias)}"},
+                {"type": "mrkdwn", "text": f"🔍 *No encontradas:* {len(no_encontradas)}"},
+                {"type": "mrkdwn", "text": f"⚠️ *Errores:* {len(errores)}"},
             ]
         },
         {"type": "divider"}
     ]
 
-    incidencias = [r for r in resultados if r["productos_ausentes"] and not r["error"]]
-    ok = [r for r in resultados if not r["productos_ausentes"] and not r["error"]]
-    errores = [r for r in resultados if r["error"]]
-
+    # Tiendas con productos ausentes
     if incidencias:
         bloques.append({
             "type": "section",
-            "text": {"type": "mrkdwn", "text": "*TIENDAS CON PRODUCTOS AUSENTES*"}
+            "text": {"type": "mrkdwn", "text": "*❌ TIENDAS CON PRODUCTOS AUSENTES*"}
         })
         for r in incidencias:
-            ausentes_str = "\n".join([f"- {p}" for p in r["productos_ausentes"]])
+            ausentes_str = "\n".join([f"  • {p}" for p in r["productos_ausentes"]])
             promos_str = " | ".join(r["promociones"][:3]) if r["promociones"] else "Sin promociones"
             bloques.append({
                 "type": "section",
@@ -132,33 +141,44 @@ def formatear_slack(resultados, fecha):
                     "text": (
                         f"*{r['nombre']}*\n"
                         f"{ausentes_str}\n"
-                        f"Promos: {promos_str}"
+                        f"🏷️ {promos_str}"
                     )
                 }
             })
         bloques.append({"type": "divider"})
 
-    if ok:
-        ok_lista = "\n".join([
-            f"OK *{r['nombre']}* | {' | '.join(r['promociones'][:2]) if r['promociones'] else 'Sin promos'}"
-            for r in ok
+    # Tiendas OK
+    if ok_list:
+        ok_texto = "\n".join([
+            f"✅ *{r['nombre']}* | 🏷️ {' | '.join(r['promociones'][:2]) if r['promociones'] else 'Sin promos'}"
+            for r in ok_list
         ])
         bloques.append({
             "type": "section",
-            "text": {"type": "mrkdwn", "text": f"*TIENDAS OK*\n{ok_lista}"}
+            "text": {"type": "mrkdwn", "text": f"*✅ TIENDAS OK*\n{ok_texto}"}
         })
 
-    if errores:
+    # Tiendas no encontradas
+    if no_encontradas:
         bloques.append({"type": "divider"})
-        err_lista = "\n".join([f"ERROR *{r['nombre']}*: {r['error'][:80]}" for r in errores])
+        nd_texto = "\n".join([f"🔍 *{r['nombre']}* — No encontrada en Glovo, revisar manualmente" for r in no_encontradas])
         bloques.append({
             "type": "section",
-            "text": {"type": "mrkdwn", "text": f"*ERRORES*\n{err_lista}"}
+            "text": {"type": "mrkdwn", "text": f"*🔍 TIENDAS NO ENCONTRADAS*\n{nd_texto}"}
+        })
+
+    # Errores técnicos
+    if errores:
+        bloques.append({"type": "divider"})
+        err_texto = "\n".join([f"⚠️ *{r['nombre']}*: {r.get('error', '')[:80]}" for r in errores])
+        bloques.append({
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": f"*⚠️ ERRORES TÉCNICOS*\n{err_texto}"}
         })
 
     bloques.append({
         "type": "context",
-        "elements": [{"type": "mrkdwn", "text": "Generado automaticamente por Glovo Monitor"}]
+        "elements": [{"type": "mrkdwn", "text": "🤖 Generado automaticamente por Glovo Monitor"}]
     })
 
     return {"blocks": bloques}
@@ -191,10 +211,11 @@ async def main():
 
         print(f"Iniciando revision - {fecha}")
 
-        for nombre, lat, lon, lang, country, ciudad in TIENDAS:
+        for nombre, lat, lon, ciudad, slug in TIENDAS:
             print(f"Revisando: {nombre}")
             resultado = {
                 "nombre": nombre,
+                "estado": "ok",
                 "productos_ausentes": [],
                 "productos_presentes": [],
                 "promociones": [],
@@ -214,8 +235,8 @@ async def main():
                     "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
                 )
 
-                # URL directa con ciudad
-                url = f"https://glovoapp.com/{lang}/{country}/{ciudad}/stores/{STORE_SLUG}"
+                url = f"https://glovoapp.com/pt/pt/{ciudad}/stores/{slug}"
+                print(f"  URL: {url}")
                 await page.goto(url, wait_until="networkidle", timeout=30000)
                 await page.wait_for_timeout(2000)
                 await cerrar_popups(page)
@@ -223,18 +244,29 @@ async def main():
                 texto, promos = await obtener_menu(page)
                 resultado["promociones"] = promos
 
+                # Comprobar qué productos están presentes
                 for producto in CARTA_MAESTRA:
                     if producto.lower() in texto.lower():
                         resultado["productos_presentes"].append(producto)
                     else:
                         resultado["productos_ausentes"].append(producto)
 
-                print(f"  Ausentes: {resultado['productos_ausentes']}")
-                print(f"  Promos: {promos}")
+                # Si hay menos de 5 productos encontrados, la tienda no cargó bien
+                if not tienda_cargo_bien(resultado["productos_presentes"]):
+                    print(f"  ⚠️ Tienda no encontrada (solo {len(resultado['productos_presentes'])} productos detectados)")
+                    resultado["estado"] = "no_encontrada"
+                    resultado["productos_ausentes"] = []
+                    resultado["productos_presentes"] = []
+                    resultado["promociones"] = []
+                else:
+                    print(f"  ✅ Cargada correctamente ({len(resultado['productos_presentes'])} productos encontrados)")
+                    print(f"  ❌ Ausentes: {resultado['productos_ausentes']}")
+                    print(f"  🏷️ Promos: {promos}")
 
                 await context.close()
 
             except Exception as e:
+                resultado["estado"] = "error"
                 resultado["error"] = str(e)[:150]
                 print(f"  Error: {e}")
                 try:
